@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Crucial viewport tag for responsiveness -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Moon Cat Runner - Mobile Responsive</title>
+    <style>
+        :root {
+            /* Sizes relative to viewport height (vh) */
+            --ground-height: 10vh;
+            --cat-base-height: 8vh; /* Cat height ~8% of screen height */
+            --cat-aspect-ratio: 0.83; /* width / height approx */
+            --cat-base-width: calc(var(--cat-base-height) * var(--cat-aspect-ratio)); /* Calculate width based on height */
+
+            /* Obstacle Colors */
+            --obstacle-rock-color: #888;
+            --obstacle-rock-highlight: #aaa;
+            --obstacle-plant-color: #55a630;
+            --obstacle-plant-highlight: #80b918;
+
+            --cat-color: #feca57;
+            --cat-helmet-color: rgba(230, 240, 255, 0.7);
+            --score-color: #f1f2f6;
+            --sky-gradient-start: #0a0f2d;
+            --sky-gradient-end: #1f285a;
+            --ground-color: #a4a4a4;
+            --message-text-color: #ffffff;
+            --message-bg-color: rgba(50, 50, 80, 0.7);
+            --star-color: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--sky-gradient-start);
+            font-family: 'Arial', sans-serif;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(to bottom, var(--sky-gradient-start), var(--sky-gradient-end) 85%);
+            cursor: pointer;
+            /* Initially hide if in portrait */
+            display: block;
+        }
+
+        /* --- Stars CSS remains the same --- */
+        .star {
+            position: absolute;
+            background-color: var(--star-color);
+            border-radius: 50%;
+            animation: twinkle infinite;
+            z-index: 0;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.6; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+
+        #ground {
+            width: 100%;
+            height: var(--ground-height); /* Use vh */
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            background-color: var(--ground-color);
+            z-index: 1;
+            border-top: 2px solid #777;
+        }
+
+        #cat {
+            /* Use CSS variables for size */
+            width: var(--cat-base-width);
+            height: var(--cat-base-height);
+            position: absolute;
+            bottom: var(--ground-height);
+            left: 5vw; /* Position from left relative to screen width */
+            z-index: 3;
+            display: flex;
+            align-items: flex-end;
+        }
+
+        #cat svg { width: 100%; height: 100%; display: block; position: relative; }
+        #cat-body { fill: var(--cat-color); stroke: #a37e2c; stroke-width: 1.5px; }
+        #cat-helmet { fill: var(--cat-helmet-color); stroke: #fff; stroke-width: 1px; transform: translate(0, -15%); }
+
+        /* --- Obstacles --- */
+        .obstacle {
+            position: absolute;
+            bottom: var(--ground-height); /* Align with ground */
+            z-index: 2;
+            display: flex;
+            align-items: flex-end;
+            /* Width/Height set by JS based on relative units */
+        }
+
+        .obstacle svg { display: block; width: 100%; height: 100%; stroke-width: 1.5px; }
+        .obstacle-rock1 svg path, .obstacle-rock2 svg path { fill: var(--obstacle-rock-color); stroke: var(--obstacle-rock-highlight); }
+        .obstacle-plant1 svg path { fill: var(--obstacle-plant-color); stroke: var(--obstacle-plant-highlight); }
+
+        /* --- Score Display Area --- */
+        #score-area {
+            position: absolute;
+            top: 2vh; /* Relative positioning */
+            right: 3vw;
+            text-align: right;
+            z-index: 4;
+            color: var(--score-color);
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+        #high-score {
+             /* Responsive font size: minimum 0.8em, preferred 2vw, maximum 1.3em */
+            font-size: clamp(0.8em, 2vw + 0.3em, 1.3em);
+            opacity: 0.8;
+            margin-bottom: 0.5vh; /* Relative spacing */
+        }
+
+        #score {
+            /* Responsive font size */
+            font-size: clamp(1.2em, 3vw + 0.5em, 2.2em);
+            font-weight: bold;
+        }
+
+        /* --- Messages --- */
+        #message, #orientation-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+             /* Responsive font size */
+            font-size: clamp(1.3em, 4vw + 0.5em, 2.5em);
+            color: var(--message-text-color);
+            background-color: var(--message-bg-color);
+            padding: 3vh 5vw; /* Relative padding */
+            border-radius: 15px;
+            text-align: center;
+            z-index: 5;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        #message {
+             display: block; /* Game message initially visible */
+        }
+
+        #orientation-message {
+            display: none; /* Orientation message initially hidden */
+            width: 80%; /* Limit width */
+        }
+
+        /* --- Running Animation (remains same) --- */
+        @keyframes runningLegs { /* ... */ }
+        #cat.running #cat-svg { /* ... */ }
+
+        /* --- Media Query for Portrait Orientation --- */
+        @media (orientation: portrait) {
+            #game-container {
+                display: none; /* Hide game */
+            }
+            #orientation-message {
+                display: flex; /* Show message */
+                justify-content: center;
+                align-items: center;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <!-- Message for Portrait Mode -->
+    <div id="orientation-message">
+        Please rotate your device to landscape mode to play!
+        <span style="font-size: 3em; margin-top: 10px; display: block;">🔄</span>
+    </div>
+
+    <!-- Game Container -->
+    <div id="game-container">
+        <div id="score-area">
+            <div id="high-score">HI 00000</div>
+            <div id="score">00000</div>
+        </div>
+        <div id="ground"></div>
+        <div id="cat">
+             <svg id="cat-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet">
+                  <path id="cat-body" d="M 50,5 C 60,0 75,5 80,15 C 85,25 85,35 80,45 C 90,40 95,50 95,60 C 95,75 90,85 80,95 L 65,95 C 60,90 55,90 50,95 C 45,90 40,90 35,95 L 20,95 C 10,85 5,75 5,60 C 5,50 10,40 20,45 C 15,35 15,25 20,15 C 25,5 40,0 50,5 Z M 40,15 Q 45,10 50,15 Q 55,10 60,15 M 30,65 Q 35,70 40,65 M 60,65 Q 65,70 70,65" />
+                  <circle id="cat-helmet" cx="50" cy="40" r="35" />
+             </svg>
+        </div>
+        <div id="message">Click or Press Space to Start!</div>
+        <!-- Obstacles -->
+    </div>
+
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const cat = document.getElementById('cat');
+        const ground = document.getElementById('ground');
+        const scoreDisplay = document.getElementById('score');
+        const highScoreDisplay = document.getElementById('high-score');
+        const message = document.getElementById('message');
+        // No need for orientation message element ref in JS for this simple approach
+
+        // --- Game Constants & Variables ---
+        let gameWidth = window.innerWidth; // Use window dimensions initially
+        let gameHeight = window.innerHeight;
+        // Read CSS variables after potential calculation based on vh/vw
+        let groundHeight;
+        let catHeight;
+        let catWidth;
+        // Need to read these *after* styles are applied, best in startGame or after DOM load
+
+        const gravity = 0.95; // Keep physics relatively constant
+        const initialJumpVelocity = 15.5; // Adjust if jump feels off with new sizes
+        const STAR_COUNT = 60; // Slightly reduced for potentially lower mobile perf
+        let stars = [];
+        let isJumping = false;
+        let catBottom; // Will be set based on groundHeight
+        let verticalVelocity = 0;
+        let score = 0;
+        let highScore = 0;
+        let obstacles = [];
+        let lastObstacle = null;
+        let gameSpeed = 6;
+        let speedIncreaseFactor = 0.0015;
+        let minObstacleInterval = 1400;
+        let maxObstacleInterval = 2800;
+        let MIN_OBSTACLE_PIXEL_DISTANCE; // Will be set based on catWidth
+        let nextObstacleTime = 0;
+        let gameLoopInterval = null;
+        let scoreInterval = null;
+        let isGameOver = true;
+        const obstacleSVG = {
+            rock1: `<svg viewBox="0 0 50 30"><path d="M 0 30 L 5 20 Q 15 10 25 20 T 45 25 L 50 30 Z"/></svg>`,
+            rock2: `<svg viewBox="0 0 40 40"><path d="M 0 40 L 5 30 C 10 15 30 15 35 30 L 40 40 Z"/></svg>`,
+            plant1: `<svg viewBox="0 0 30 50"><path d="M 15 50 V 10 Q 15 0 25 5 L 28 15 Q 20 20 15 25 V 15 Q 5 10 2 20 L 5 25 Q 10 30 15 35 Z"/></svg>`
+        };
+        const obstacleTypes = Object.keys(obstacleSVG);
+        const HIGH_SCORE_KEY = 'catRunnerHighScore';
+
+
+        // --- Utility to get computed style dimensions ---
+        function updateDimensions() {
+            gameWidth = window.innerWidth;
+            gameHeight = window.innerHeight;
+             // Get computed styles AFTER CSS based on vh/vw is applied
+            groundHeight = parseFloat(getComputedStyle(ground).height);
+            catHeight = parseFloat(getComputedStyle(cat).height);
+            catWidth = parseFloat(getComputedStyle(cat).width);
+            catBottom = groundHeight; // Set initial cat bottom position
+            MIN_OBSTACLE_PIXEL_DISTANCE = catWidth * 6; // Recalculate based on current cat width
+             // Optional: Log dimensions for debugging
+             // console.log(`Dims: ${gameWidth}x${gameHeight}, Ground: ${groundHeight}, Cat: ${catWidth}x${catHeight}`);
+        }
+
+        // --- High Score Functions (remain the same) ---
+        function loadHighScore() { /* ... */
+             const storedHighScore = localStorage.getItem(HIGH_SCORE_KEY);
+            highScore = storedHighScore ? parseInt(storedHighScore, 10) : 0;
+            updateHighScoreDisplay();
+         }
+        function updateHighScoreDisplay() { /* ... */
+             highScoreDisplay.textContent = `HI ${highScore.toString().padStart(5, '0')}`;
+         }
+        function saveHighScoreIfBeaten() { /* ... */
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem(HIGH_SCORE_KEY, highScore);
+                updateHighScoreDisplay();
+            }
+         }
+
+        // --- Star Functions (remain the same) ---
+        function createStar() { /* ... */
+            const star = document.createElement('div');
+            star.classList.add('star');
+            const size = Math.random() * 2.5 + 0.5;
+            star.style.width = `${size}px`; star.style.height = `${size}px`;
+            star.style.left = `${Math.random() * gameWidth}px`;
+            star.style.top = `${Math.random() * (gameHeight * 0.8)}px`; // Avoid low stars
+            star.style.animationDuration = `${Math.random() * 2 + 1}s`;
+            star.style.animationDelay = `${Math.random() * 2}s`;
+            gameContainer.insertBefore(star, ground);
+            stars.push(star);
+         }
+        function clearStars() { /* ... */
+            stars.forEach(star => star.remove()); stars = [];
+         }
+
+        // --- Game Logic ---
+        function startGame() {
+            if (!isGameOver) return;
+
+            updateDimensions(); // IMPORTANT: Get dimensions right before starting
+
+            // Check orientation again just before start (though CSS handles display)
+            if (window.innerHeight > window.innerWidth) {
+                 console.log("Still in portrait, cannot start game.");
+                 // Optionally show the message element via JS if needed, but CSS should handle it
+                 return;
+            }
+
+
+            console.log("Starting Game (Mobile)...");
+            clearStars();
+            for (let i = 0; i < STAR_COUNT; i++) createStar();
+
+            isGameOver = false;
+            score = 0;
+            scoreDisplay.textContent = score.toString().padStart(5, '0');
+            // catBottom is already set by updateDimensions
+            cat.style.bottom = catBottom + 'px';
+            cat.style.left = `${5 * window.innerWidth / 100}px`; // Ensure left position is updated (5vw)
+            obstacles.forEach(obstacle => obstacle.element.remove());
+            obstacles = [];
+            lastObstacle = null;
+            gameSpeed = 6; // Consider starting slightly slower on mobile? Test needed.
+            nextObstacleTime = Date.now() + getRandomInterval(true);
+            message.style.display = 'none'; // Hide start/game over message
+            cat.classList.add('running');
+
+            // Clear previous intervals if any (safety check)
+             if (gameLoopInterval) clearInterval(gameLoopInterval);
+             if (scoreInterval) clearInterval(scoreInterval);
+
+            gameLoopInterval = setInterval(gameLoop, 20); // ~50 FPS
+            scoreInterval = setInterval(updateScore, 100);
+        }
+
+        function gameLoop() {
+            if (isGameOver) return;
+            handleJump();
+            moveObstacles();
+            spawnObstacle();
+            checkCollisions();
+            increaseSpeed();
+        }
+
+        function handleJump() { /* ... (remains the same) ... */
+             if (isJumping) {
+                catBottom += verticalVelocity;
+                verticalVelocity -= gravity;
+                if (catBottom <= groundHeight) {
+                    catBottom = groundHeight;
+                    isJumping = false;
+                    verticalVelocity = 0;
+                }
+                 cat.style.bottom = catBottom + 'px';
+            } else if (catBottom !== groundHeight) { // Ensure grounded
+                 catBottom = groundHeight;
+                 cat.style.bottom = catBottom + 'px';
+             }
+         }
+
+        function moveObstacles() { /* ... (remains the same) ... */
+             if(lastObstacle && lastObstacle.left + lastObstacle.width < 0) { lastObstacle = null; }
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obstacle = obstacles[i];
+                obstacle.left -= gameSpeed;
+                obstacle.element.style.left = obstacle.left + 'px';
+                if (obstacle.left + obstacle.width < 0) {
+                    if(obstacle === lastObstacle) { lastObstacle = null; }
+                    obstacle.element.remove();
+                    obstacles.splice(i, 1);
+                }
+            }
+         }
+
+        function spawnObstacle() {
+             const now = Date.now();
+            if (now > nextObstacleTime) {
+                 // Use recalculated MIN_OBSTACLE_PIXEL_DISTANCE
+                if (lastObstacle && lastObstacle.left + lastObstacle.width > (gameWidth - MIN_OBSTACLE_PIXEL_DISTANCE)) {
+                     nextObstacleTime = now + 50;
+                     return;
+                }
+                createObstacle();
+                nextObstacleTime = now + getRandomInterval();
+            }
+        }
+
+        function createObstacle() {
+             const obstacleElement = document.createElement('div');
+            obstacleElement.classList.add('obstacle');
+            const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+            obstacleElement.classList.add(`obstacle-${type}`);
+            obstacleElement.innerHTML = obstacleSVG[type];
+
+            let obstacleHeight, obstacleWidth;
+            // Base obstacle sizes on game height (vh makes this relative)
+            if (type.includes('rock')) {
+                 obstacleHeight = gameHeight * 0.08; // 8% of screen height
+                 obstacleWidth = obstacleHeight * 1.2; // Maintain aspect ratio
+            } else { // Plant
+                 obstacleHeight = gameHeight * 0.11; // 11% of screen height
+                 obstacleWidth = obstacleHeight * 0.6; // Maintain aspect ratio
+            }
+            // Apply minimum pixel sizes if screen is extremely small? Optional.
+            // obstacleHeight = Math.max(20, obstacleHeight);
+            // obstacleWidth = Math.max(15, obstacleWidth);
+
+            obstacleElement.style.width = obstacleWidth + 'px';
+            obstacleElement.style.height = obstacleHeight + 'px';
+            obstacleElement.style.left = gameWidth + 'px'; // Spawn off screen right
+
+            gameContainer.appendChild(obstacleElement);
+            const newObstacle = { element: obstacleElement, left: gameWidth, width: obstacleWidth, height: obstacleHeight, type: type };
+            obstacles.push(newObstacle);
+            lastObstacle = newObstacle;
+        }
+
+        function getRandomInterval(isInitial = false) { /* ... (remains the same) ... */
+            const speedFactor = Math.max(0.55, 1 - (gameSpeed / 35));
+            let min = minObstacleInterval * speedFactor;
+            let max = maxObstacleInterval * speedFactor;
+            if (isInitial) { min *= 1.8; max *= 1.8; }
+            return Math.random() * (max - min) + min;
+         }
+
+        function checkCollisions() { /* ... (remains the same) ... */
+             // Uses getBoundingClientRect which should work with scaled elements
+             const catRect = cat.getBoundingClientRect();
+             for (const obstacle of obstacles) {
+                const obstacleRect = obstacle.element.getBoundingClientRect();
+                const bufferX = catRect.width * 0.15;
+                const bufferYTop = catRect.height * 0.1;
+                const bufferYBottom = catRect.height * 0.05;
+                if ( catRect.left + bufferX < obstacleRect.right && catRect.right - bufferX > obstacleRect.left && catRect.top + bufferYTop < obstacleRect.bottom && catRect.bottom - bufferYBottom > obstacleRect.top ) {
+                    gameOver();
+                    return;
+                }
+            }
+         }
+
+        function updateScore() { /* ... (remains the same) ... */
+            if (!isGameOver) { score++; scoreDisplay.textContent = score.toString().padStart(5, '0'); }
+        }
+
+        function increaseSpeed() { /* ... (remains the same) ... */
+            gameSpeed += speedIncreaseFactor;
+        }
+
+        function gameOver() {
+            if (isGameOver) return;
+            console.log("Game Over!");
+            isGameOver = true;
+            clearInterval(gameLoopInterval);
+            clearInterval(scoreInterval);
+            cat.classList.remove('running');
+            saveHighScoreIfBeaten();
+            message.textContent = `Game Over! Score: ${score}. Tap to Restart.`; // Mobile friendly message
+            message.style.display = 'block';
+             // Nullify intervals
+             gameLoopInterval = null;
+             scoreInterval = null;
+        }
+
+        function jump() { /* ... (remains the same) ... */
+             // Check against current groundHeight
+             if (!isJumping && !isGameOver && catBottom <= groundHeight + 1) {
+                isJumping = true;
+                verticalVelocity = initialJumpVelocity;
+            }
+         }
+
+        // --- Event Listeners ---
+        function handleInput(event) {
+             // Prevent default actions like scrolling or zooming on touch/space
+             if ((event.type === 'keydown' && event.code === 'Space') || event.type === 'touchstart' || event.type === 'click') {
+                 event.preventDefault();
+
+                 // Check orientation again on input, just in case
+                 if (window.innerHeight > window.innerWidth) {
+                     console.log("Input ignored: Portrait mode");
+                     return;
+                 }
+
+                 if (isGameOver) {
+                    startGame();
+                } else {
+                    jump();
+                }
+            }
+        }
+        document.addEventListener('keydown', handleInput); // For keyboard testing/desktops
+        gameContainer.addEventListener('click', handleInput); // Fallback click
+        gameContainer.addEventListener('touchstart', handleInput); // Primary mobile input
+
+        // --- Resize Listener ---
+        // Handle resizing/orientation change more gracefully
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            // Clear previous timeout to avoid multiple quick calls
+            clearTimeout(resizeTimeout);
+            // Wait a short moment after resize stops before reacting
+            resizeTimeout = setTimeout(() => {
+                console.log("Window resized/rotated");
+                 if (!isGameOver) {
+                     // Option 1: Pause the game (complex)
+                     // Option 2: Just end the game (simpler)
+                     console.log("Game ended due to resize/rotation.");
+                     gameOver();
+                     message.textContent = `Game Paused. Tap to Restart.`; // Or specific message
+                     message.style.display = 'block';
+                 }
+                 // Always update dimensions for the next game start
+                 updateDimensions();
+                 // If game over message is showing, ensure cat is placed correctly
+                 if (isGameOver) {
+                    cat.style.bottom = groundHeight + 'px';
+                 }
+            }, 250); // 250ms debounce
+        });
+
+
+        // --- Initial Setup ---
+        loadHighScore();
+        message.style.display = 'block'; // Show start message
+        // Initial dimension update on load
+        // Use a small delay or DOMContentLoaded if styles rely heavily on calculated vh/vw
+        window.addEventListener('DOMContentLoaded', () => {
+            updateDimensions();
+            cat.style.bottom = catBottom + 'px'; // Set initial position correctly
+             scoreDisplay.textContent = score.toString().padStart(5, '0');
+        });
+
+
+    </script>
+</body>
+</html>

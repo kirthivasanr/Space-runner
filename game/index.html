@@ -2,530 +2,794 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Crucial viewport tag for responsiveness -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Moon Cat Runner - Mobile Responsive</title>
+    <title>Cosmic Cat Runner: Hyperdrive</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Sizes relative to viewport height (vh) */
-            --ground-height: 10vh;
-            --cat-base-height: 8vh; /* Cat height ~8% of screen height */
-            --cat-aspect-ratio: 0.83; /* width / height approx */
-            --cat-base-width: calc(var(--cat-base-height) * var(--cat-aspect-ratio)); /* Calculate width based on height */
+            /* Colors & Theme */
+            --primary-glow: #00f3ff;
+            --secondary-glow: #bc13fe;
+            --ui-bg: rgba(10, 16, 44, 0.85);
+            --text-main: #ffffff;
+            --coin-color: #ffd700;
 
-            /* Obstacle Colors */
-            --obstacle-rock-color: #888;
-            --obstacle-rock-highlight: #aaa;
-            --obstacle-plant-color: #55a630;
-            --obstacle-plant-highlight: #80b918;
+            /* Dynamic Biome Colors */
+            --sky-top: #020510;
+            --sky-bot: #182848;
+            --ground-top: #2a2a5a;
+            --ground-bot: #101025;
 
-            --cat-color: #feca57;
-            --cat-helmet-color: rgba(230, 240, 255, 0.7);
-            --score-color: #f1f2f6;
-            --sky-gradient-start: #0a0f2d;
-            --sky-gradient-end: #1f285a;
-            --ground-color: #a4a4a4;
-            --message-text-color: #ffffff;
-            --message-bg-color: rgba(50, 50, 80, 0.7);
-            --star-color: #ffffff;
+            /* Game Dimensions */
+            --ground-height: 12vh;
+
+            /* Fonts */
+            --font-display: 'Orbitron', sans-serif;
+            --font-body: 'Exo 2', sans-serif;
         }
 
         body {
             margin: 0;
             overflow: hidden;
-            background-color: var(--sky-gradient-start);
-            font-family: 'Arial', sans-serif;
+            background-color: #050b14;
+            font-family: var(--font-body);
+            color: var(--text-main);
+            touch-action: none; /* Prevent default touch actions */
         }
 
-        #game-container {
+        /* --- LAYOUT & LAYERS --- */
+        #game-wrapper {
+            position: relative;
             width: 100vw;
             height: 100vh;
-            position: relative;
             overflow: hidden;
-            background: linear-gradient(to bottom, var(--sky-gradient-start), var(--sky-gradient-end) 85%);
-            cursor: pointer;
-            /* Initially hide if in portrait */
-            display: block;
         }
 
-        /* --- Stars CSS remains the same --- */
-        .star {
+        /* Parallax Background Layers */
+        .parallax-layer {
             position: absolute;
-            background-color: var(--star-color);
-            border-radius: 50%;
-            animation: twinkle infinite;
-            z-index: 0;
-        }
-        @keyframes twinkle {
-            0%, 100% { opacity: 0.6; transform: scale(0.9); }
-            50% { opacity: 1; transform: scale(1); }
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-repeat: repeat-x;
+            background-size: auto 100%;
+            will-change: background-position;
         }
 
-        #ground {
+        #bg-sky {
+            background: linear-gradient(to bottom, var(--sky-top), var(--sky-bot) 120%);
+            z-index: 0;
+            transition: background 2s ease;
+        }
+        #bg-stars-far { z-index: 1; opacity: 0.8; }
+        #bg-stars-near { z-index: 2; }
+        #bg-mountains {
+            z-index: 3;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" preserveAspectRatio="none"><path d="M0,300 L0,150 L100,50 L200,180 L300,80 L450,250 L600,100 L750,200 L900,50 L1000,150 L1000,300 Z" fill="%231a1a3a" opacity="0.5"/></svg>');
+            background-size: 100vw 40vh;
+            background-position: 0 bottom;
+            background-repeat: repeat-x;
+            bottom: var(--ground-height);
+            height: 40vh;
             width: 100%;
-            height: var(--ground-height); /* Use vh */
+        }
+
+        /* Ground */
+        #ground {
             position: absolute;
             bottom: 0;
             left: 0;
-            background-color: var(--ground-color);
-            z-index: 1;
-            border-top: 2px solid #777;
+            width: 100%;
+            height: var(--ground-height);
+            background: linear-gradient(180deg, var(--ground-top) 0%, var(--ground-bot) 100%);
+            border-top: 2px solid var(--primary-glow);
+            box-shadow: 0 0 20px var(--primary-glow);
+            z-index: 10;
+            transition: background 2s ease, border-color 2s ease, box-shadow 2s ease;
         }
 
-        #cat {
-            /* Use CSS variables for size */
-            width: var(--cat-base-width);
-            height: var(--cat-base-height);
+        /* Game Canvas Area */
+        #game-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            pointer-events: none; /* Let clicks pass through to container */
+        }
+
+        /* Characters & Entities (DOM based for simplicity mixed with JS) */
+        .entity {
             position: absolute;
             bottom: var(--ground-height);
-            left: 5vw; /* Position from left relative to screen width */
-            z-index: 3;
+            will-change: transform, left;
+        }
+
+        @keyframes run-bob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(5px); }
+        }
+
+        .run-anim svg {
+            animation: run-bob 0.4s infinite ease-in-out;
+        }
+
+        @keyframes explode {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            50% { transform: scale(1.5) rotate(180deg); opacity: 0.5; }
+            100% { transform: scale(2) rotate(360deg); opacity: 0; }
+        }
+
+        .explode-anim {
+            animation: explode 0.5s forwards;
+        }
+
+        /* --- UI OVERLAYS --- */
+        .ui-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
             display: flex;
-            align-items: flex-end;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            transition: opacity 0.3s;
         }
 
-        #cat svg { width: 100%; height: 100%; display: block; position: relative; }
-        #cat-body { fill: var(--cat-color); stroke: #a37e2c; stroke-width: 1.5px; }
-        #cat-helmet { fill: var(--cat-helmet-color); stroke: #fff; stroke-width: 1px; transform: translate(0, -15%); }
-
-        /* --- Obstacles --- */
-        .obstacle {
-            position: absolute;
-            bottom: var(--ground-height); /* Align with ground */
-            z-index: 2;
-            display: flex;
-            align-items: flex-end;
-            /* Width/Height set by JS based on relative units */
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
         }
 
-        .obstacle svg { display: block; width: 100%; height: 100%; stroke-width: 1.5px; }
-        .obstacle-rock1 svg path, .obstacle-rock2 svg path { fill: var(--obstacle-rock-color); stroke: var(--obstacle-rock-highlight); }
-        .obstacle-plant1 svg path { fill: var(--obstacle-plant-color); stroke: var(--obstacle-plant-highlight); }
-
-        /* --- Score Display Area --- */
-        #score-area {
-            position: absolute;
-            top: 2vh; /* Relative positioning */
-            right: 3vw;
-            text-align: right;
-            z-index: 4;
-            color: var(--score-color);
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+        h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 4rem);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: transparent;
+            -webkit-text-stroke: 1px var(--primary-glow);
+            text-shadow: 0 0 15px var(--primary-glow);
+            margin-bottom: 2rem;
+            background: linear-gradient(90deg, #fff, #00f3ff);
+            -webkit-background-clip: text;
         }
 
-        #high-score {
-             /* Responsive font size: minimum 0.8em, preferred 2vw, maximum 1.3em */
-            font-size: clamp(0.8em, 2vw + 0.3em, 1.3em);
-            opacity: 0.8;
-            margin-bottom: 0.5vh; /* Relative spacing */
-        }
-
-        #score {
-            /* Responsive font size */
-            font-size: clamp(1.2em, 3vw + 0.5em, 2.2em);
-            font-weight: bold;
-        }
-
-        /* --- Messages --- */
-        #message, #orientation-message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-             /* Responsive font size */
-            font-size: clamp(1.3em, 4vw + 0.5em, 2.5em);
-            color: var(--message-text-color);
-            background-color: var(--message-bg-color);
-            padding: 3vh 5vw; /* Relative padding */
-            border-radius: 15px;
+        .panel {
+            background: var(--ui-bg);
+            border: 1px solid var(--primary-glow);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.2);
             text-align: center;
-            z-index: 5;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            max-width: 90%;
+            width: 400px;
         }
 
-        #message {
-             display: block; /* Game message initially visible */
+        .btn {
+            background: transparent;
+            border: 2px solid var(--primary-glow);
+            color: var(--primary-glow);
+            padding: 10px 30px;
+            margin: 10px;
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
         }
 
-        #orientation-message {
-            display: none; /* Orientation message initially hidden */
-            width: 80%; /* Limit width */
+        .btn:hover {
+            background: var(--primary-glow);
+            color: #000;
+            box-shadow: 0 0 20px var(--primary-glow);
         }
 
-        /* --- Running Animation (remains same) --- */
-        @keyframes runningLegs { /* ... */ }
-        #cat.running #cat-svg { /* ... */ }
-
-        /* --- Media Query for Portrait Orientation --- */
-        @media (orientation: portrait) {
-            #game-container {
-                display: none; /* Hide game */
-            }
-            #orientation-message {
-                display: flex; /* Show message */
-                justify-content: center;
-                align-items: center;
-            }
+        .btn-secondary {
+            border-color: var(--secondary-glow);
+            color: var(--secondary-glow);
         }
 
+        .btn-secondary:hover {
+            background: var(--secondary-glow);
+            color: #fff;
+            box-shadow: 0 0 20px var(--secondary-glow);
+        }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 50;
+            font-family: var(--font-display);
+            text-shadow: 0 0 5px #000;
+        }
+
+        .hud-item {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Floating Text */
+        .floating-text {
+            position: absolute;
+            font-family: var(--font-display);
+            font-weight: bold;
+            color: #fff;
+            animation: floatUp 1s forwards;
+            pointer-events: none;
+            z-index: 60;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-50px) scale(1.5); }
+        }
+
+        /* Character Preview */
+        .char-preview {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 5px;
+        }
     </style>
 </head>
 <body>
-    <!-- Message for Portrait Mode -->
-    <div id="orientation-message">
-        Please rotate your device to landscape mode to play!
-        <span style="font-size: 3em; margin-top: 10px; display: block;">🔄</span>
-    </div>
 
-    <!-- Game Container -->
-    <div id="game-container">
-        <div id="score-area">
-            <div id="high-score">HI 00000</div>
-            <div id="score">00000</div>
-        </div>
+    <div id="game-wrapper">
+        <!-- Backgrounds -->
+        <div id="bg-sky" class="parallax-layer"></div>
+        <div id="bg-stars-far" class="parallax-layer"></div>
+        <div id="bg-stars-near" class="parallax-layer"></div>
+        <div id="bg-mountains" class="parallax-layer"></div>
+
+        <!-- Game World -->
         <div id="ground"></div>
-        <div id="cat">
-             <svg id="cat-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet">
-                  <path id="cat-body" d="M 50,5 C 60,0 75,5 80,15 C 85,25 85,35 80,45 C 90,40 95,50 95,60 C 95,75 90,85 80,95 L 65,95 C 60,90 55,90 50,95 C 45,90 40,90 35,95 L 20,95 C 10,85 5,75 5,60 C 5,50 10,40 20,45 C 15,35 15,25 20,15 C 25,5 40,0 50,5 Z M 40,15 Q 45,10 50,15 Q 55,10 60,15 M 30,65 Q 35,70 40,65 M 60,65 Q 65,70 70,65" />
-                  <circle id="cat-helmet" cx="50" cy="40" r="35" />
-             </svg>
+        <div id="game-layer">
+            <!-- Entities injected here -->
         </div>
-        <div id="message">Click or Press Space to Start!</div>
-        <!-- Obstacles -->
+
+        <!-- HUD -->
+        <div id="hud" class="hidden">
+            <div class="hud-item" id="score-display">DIST: 0000m</div>
+            <div class="hud-item" style="color: var(--coin-color)">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"></path></svg>
+                <span id="coin-display">0</span>
+            </div>
+        </div>
+
+        <!-- Main Menu -->
+        <div id="menu-screen" class="ui-screen">
+            <h1>Cosmic Cat</h1>
+            <div class="panel">
+                <div class="char-preview" id="menu-char-preview">
+                    <!-- SVG injected by JS -->
+                </div>
+                <button class="btn" onclick="game.start()">Launch Run</button>
+                <br>
+                <button class="btn btn-secondary" onclick="ui.showProfile()">Profile & Char</button>
+            </div>
+        </div>
+
+        <!-- Profile/Character Screen -->
+        <div id="profile-screen" class="ui-screen hidden">
+            <div class="panel">
+                <h2>PILOT PROFILE</h2>
+                <div class="stat-row"><span>High Score:</span> <span id="profile-best-score">0</span></div>
+                <div class="stat-row"><span>Total Runs:</span> <span id="profile-total-runs">0</span></div>
+                <div class="stat-row"><span>Total Gems:</span> <span id="profile-total-coins">0</span></div>
+
+                <h3 style="margin-top: 20px;">SELECT CLASS</h3>
+                <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
+                    <button class="btn" id="btn-char-0" onclick="game.selectCharacter(0)">Scout</button>
+                    <button class="btn btn-secondary" id="btn-char-1" onclick="game.selectCharacter(1)">Tank</button>
+                    <button class="btn btn-secondary" id="btn-char-2" onclick="game.selectCharacter(2)">Speed</button>
+                </div>
+
+                <button class="btn" onclick="ui.showMenu()">Back</button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="ui-screen hidden">
+            <h1>CRITICAL FAILURE</h1>
+            <div class="panel">
+                <p>Mission Terminated</p>
+                <div class="stat-row"><span>Distance:</span> <span id="go-score">0</span></div>
+                <div class="stat-row"><span>Gems Collected:</span> <span id="go-coins">0</span></div>
+                <br>
+                <button class="btn" onclick="game.start()">Re-Deploy</button>
+                <br>
+                <button class="btn btn-secondary" onclick="ui.showMenu()">Base</button>
+            </div>
+        </div>
     </div>
 
+    <!-- Script Placeholder -->
     <script>
-        const gameContainer = document.getElementById('game-container');
-        const cat = document.getElementById('cat');
-        const ground = document.getElementById('ground');
-        const scoreDisplay = document.getElementById('score');
-        const highScoreDisplay = document.getElementById('high-score');
-        const message = document.getElementById('message');
-        // No need for orientation message element ref in JS for this simple approach
+        /**
+         * GAME ENGINE & LOGIC
+         */
 
-        // --- Game Constants & Variables ---
-        let gameWidth = window.innerWidth; // Use window dimensions initially
-        let gameHeight = window.innerHeight;
-        // Read CSS variables after potential calculation based on vh/vw
-        let groundHeight;
-        let catHeight;
-        let catWidth;
-        // Need to read these *after* styles are applied, best in startGame or after DOM load
+        // --- ASSETS & DATA ---
+        const CHARACTERS = [
+            {
+                id: 0,
+                name: "Scout",
+                color: "#feca57",
+                helmet: "rgba(230, 240, 255, 0.7)",
+                svg: `<svg viewBox="0 0 100 100"><path fill="#feca57" stroke="#a37e2c" stroke-width="2" d="M 50,5 C 60,0 75,5 80,15 C 85,25 85,35 80,45 C 90,40 95,50 95,60 C 95,75 90,85 80,95 L 65,95 C 60,90 55,90 50,95 C 45,90 40,90 35,95 L 20,95 C 10,85 5,75 5,60 C 5,50 10,40 20,45 C 15,35 15,25 20,15 C 25,5 40,0 50,5 Z M 40,15 Q 45,10 50,15 Q 55,10 60,15 M 30,65 Q 35,70 40,65 M 60,65 Q 65,70 70,65" /><circle cx="50" cy="40" r="35" fill="rgba(230, 240, 255, 0.7)" stroke="#fff" stroke-width="1" /></svg>`
+            },
+            {
+                id: 1,
+                name: "Tank",
+                color: "#ff6b6b",
+                helmet: "rgba(100, 255, 100, 0.3)",
+                svg: `<svg viewBox="0 0 100 100"><rect x="20" y="20" width="60" height="75" rx="10" fill="#ff6b6b" stroke="#880000" stroke-width="3" /><path d="M 20,95 L 10,95 L 10,80 L 20,80 Z M 80,95 L 90,95 L 90,80 L 80,80 Z" fill="#555" /><circle cx="50" cy="45" r="25" fill="rgba(100, 255, 100, 0.3)" stroke="#fff" stroke-width="2" /><rect x="30" y="80" width="40" height="10" fill="#333" /></svg>`
+            },
+            {
+                id: 2,
+                name: "Speedster",
+                color: "#2ed573",
+                helmet: "rgba(255, 255, 255, 0.5)",
+                svg: `<svg viewBox="0 0 100 100"><path d="M 50,20 L 80,50 L 50,80 L 20,50 Z" fill="#2ed573" stroke="#22a050" stroke-width="2" /><circle cx="50" cy="50" r="15" fill="#fff" /><path d="M 10,50 L 0,40 M 10,50 L 0,60" stroke="#fff" stroke-width="3" /></svg>`
+            }
+        ];
 
-        const gravity = 0.95; // Keep physics relatively constant
-        const initialJumpVelocity = 15.5; // Adjust if jump feels off with new sizes
-        const STAR_COUNT = 60; // Slightly reduced for potentially lower mobile perf
-        let stars = [];
-        let isJumping = false;
-        let catBottom; // Will be set based on groundHeight
-        let verticalVelocity = 0;
-        let score = 0;
-        let highScore = 0;
-        let obstacles = [];
-        let lastObstacle = null;
-        let gameSpeed = 6;
-        let speedIncreaseFactor = 0.0015;
-        let minObstacleInterval = 1400;
-        let maxObstacleInterval = 2800;
-        let MIN_OBSTACLE_PIXEL_DISTANCE; // Will be set based on catWidth
-        let nextObstacleTime = 0;
-        let gameLoopInterval = null;
-        let scoreInterval = null;
-        let isGameOver = true;
-        const obstacleSVG = {
-            rock1: `<svg viewBox="0 0 50 30"><path d="M 0 30 L 5 20 Q 15 10 25 20 T 45 25 L 50 30 Z"/></svg>`,
-            rock2: `<svg viewBox="0 0 40 40"><path d="M 0 40 L 5 30 C 10 15 30 15 35 30 L 40 40 Z"/></svg>`,
-            plant1: `<svg viewBox="0 0 30 50"><path d="M 15 50 V 10 Q 15 0 25 5 L 28 15 Q 20 20 15 25 V 15 Q 5 10 2 20 L 5 25 Q 10 30 15 35 Z"/></svg>`
+        // --- SYSTEM ---
+        const ui = {
+            screens: {
+                menu: document.getElementById('menu-screen'),
+                profile: document.getElementById('profile-screen'),
+                gameover: document.getElementById('gameover-screen'),
+                hud: document.getElementById('hud')
+            },
+
+            showMenu() {
+                this.hideAll();
+                this.screens.menu.classList.remove('hidden');
+                this.renderPreview();
+            },
+
+            showProfile() {
+                this.hideAll();
+                this.screens.profile.classList.remove('hidden');
+                profile.updateDisplay();
+            },
+
+            showGame() {
+                this.hideAll();
+                this.screens.hud.classList.remove('hidden');
+            },
+
+            showGameOver(score, coins) {
+                this.hideAll();
+                this.screens.gameover.classList.remove('hidden');
+                document.getElementById('go-score').textContent = Math.floor(score) + 'm';
+                document.getElementById('go-coins').textContent = coins;
+            },
+
+            hideAll() {
+                Object.values(this.screens).forEach(s => s.classList.add('hidden'));
+            },
+
+            renderPreview() {
+                const char = CHARACTERS[profile.data.selectedChar];
+                document.getElementById('menu-char-preview').innerHTML = char.svg;
+            },
+
+            updateHUD(score, coins) {
+                document.getElementById('score-display').textContent = `DIST: ${Math.floor(score).toString().padStart(4, '0')}m`;
+                document.getElementById('coin-display').textContent = coins;
+            },
+
+            spawnFloatingText(text, x, y, color = '#fff') {
+                const el = document.createElement('div');
+                el.className = 'floating-text';
+                el.textContent = text;
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+                el.style.color = color;
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 1000);
+            }
         };
-        const obstacleTypes = Object.keys(obstacleSVG);
-        const HIGH_SCORE_KEY = 'catRunnerHighScore';
 
+        const profile = {
+            data: {
+                highScore: 0,
+                totalRuns: 0,
+                totalCoins: 0,
+                selectedChar: 0,
+                unlockedChars: [0]
+            },
 
-        // --- Utility to get computed style dimensions ---
-        function updateDimensions() {
-            gameWidth = window.innerWidth;
-            gameHeight = window.innerHeight;
-             // Get computed styles AFTER CSS based on vh/vw is applied
-            groundHeight = parseFloat(getComputedStyle(ground).height);
-            catHeight = parseFloat(getComputedStyle(cat).height);
-            catWidth = parseFloat(getComputedStyle(cat).width);
-            catBottom = groundHeight; // Set initial cat bottom position
-            MIN_OBSTACLE_PIXEL_DISTANCE = catWidth * 6; // Recalculate based on current cat width
-             // Optional: Log dimensions for debugging
-             // console.log(`Dims: ${gameWidth}x${gameHeight}, Ground: ${groundHeight}, Cat: ${catWidth}x${catHeight}`);
-        }
-
-        // --- High Score Functions (remain the same) ---
-        function loadHighScore() { /* ... */
-             const storedHighScore = localStorage.getItem(HIGH_SCORE_KEY);
-            highScore = storedHighScore ? parseInt(storedHighScore, 10) : 0;
-            updateHighScoreDisplay();
-         }
-        function updateHighScoreDisplay() { /* ... */
-             highScoreDisplay.textContent = `HI ${highScore.toString().padStart(5, '0')}`;
-         }
-        function saveHighScoreIfBeaten() { /* ... */
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem(HIGH_SCORE_KEY, highScore);
-                updateHighScoreDisplay();
-            }
-         }
-
-        // --- Star Functions (remain the same) ---
-        function createStar() { /* ... */
-            const star = document.createElement('div');
-            star.classList.add('star');
-            const size = Math.random() * 2.5 + 0.5;
-            star.style.width = `${size}px`; star.style.height = `${size}px`;
-            star.style.left = `${Math.random() * gameWidth}px`;
-            star.style.top = `${Math.random() * (gameHeight * 0.8)}px`; // Avoid low stars
-            star.style.animationDuration = `${Math.random() * 2 + 1}s`;
-            star.style.animationDelay = `${Math.random() * 2}s`;
-            gameContainer.insertBefore(star, ground);
-            stars.push(star);
-         }
-        function clearStars() { /* ... */
-            stars.forEach(star => star.remove()); stars = [];
-         }
-
-        // --- Game Logic ---
-        function startGame() {
-            if (!isGameOver) return;
-
-            updateDimensions(); // IMPORTANT: Get dimensions right before starting
-
-            // Check orientation again just before start (though CSS handles display)
-            if (window.innerHeight > window.innerWidth) {
-                 console.log("Still in portrait, cannot start game.");
-                 // Optionally show the message element via JS if needed, but CSS should handle it
-                 return;
-            }
-
-
-            console.log("Starting Game (Mobile)...");
-            clearStars();
-            for (let i = 0; i < STAR_COUNT; i++) createStar();
-
-            isGameOver = false;
-            score = 0;
-            scoreDisplay.textContent = score.toString().padStart(5, '0');
-            // catBottom is already set by updateDimensions
-            cat.style.bottom = catBottom + 'px';
-            cat.style.left = `${5 * window.innerWidth / 100}px`; // Ensure left position is updated (5vw)
-            obstacles.forEach(obstacle => obstacle.element.remove());
-            obstacles = [];
-            lastObstacle = null;
-            gameSpeed = 6; // Consider starting slightly slower on mobile? Test needed.
-            nextObstacleTime = Date.now() + getRandomInterval(true);
-            message.style.display = 'none'; // Hide start/game over message
-            cat.classList.add('running');
-
-            // Clear previous intervals if any (safety check)
-             if (gameLoopInterval) clearInterval(gameLoopInterval);
-             if (scoreInterval) clearInterval(scoreInterval);
-
-            gameLoopInterval = setInterval(gameLoop, 20); // ~50 FPS
-            scoreInterval = setInterval(updateScore, 100);
-        }
-
-        function gameLoop() {
-            if (isGameOver) return;
-            handleJump();
-            moveObstacles();
-            spawnObstacle();
-            checkCollisions();
-            increaseSpeed();
-        }
-
-        function handleJump() { /* ... (remains the same) ... */
-             if (isJumping) {
-                catBottom += verticalVelocity;
-                verticalVelocity -= gravity;
-                if (catBottom <= groundHeight) {
-                    catBottom = groundHeight;
-                    isJumping = false;
-                    verticalVelocity = 0;
+            load() {
+                const stored = localStorage.getItem('cosmicCatProfile');
+                if (stored) {
+                    this.data = JSON.parse(stored);
                 }
-                 cat.style.bottom = catBottom + 'px';
-            } else if (catBottom !== groundHeight) { // Ensure grounded
-                 catBottom = groundHeight;
-                 cat.style.bottom = catBottom + 'px';
-             }
-         }
+            },
 
-        function moveObstacles() { /* ... (remains the same) ... */
-             if(lastObstacle && lastObstacle.left + lastObstacle.width < 0) { lastObstacle = null; }
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const obstacle = obstacles[i];
-                obstacle.left -= gameSpeed;
-                obstacle.element.style.left = obstacle.left + 'px';
-                if (obstacle.left + obstacle.width < 0) {
-                    if(obstacle === lastObstacle) { lastObstacle = null; }
-                    obstacle.element.remove();
-                    obstacles.splice(i, 1);
+            save() {
+                localStorage.setItem('cosmicCatProfile', JSON.stringify(this.data));
+            },
+
+            updateDisplay() {
+                document.getElementById('profile-best-score').textContent = Math.floor(this.data.highScore);
+                document.getElementById('profile-total-runs').textContent = this.data.totalRuns;
+                document.getElementById('profile-total-coins').textContent = this.data.totalCoins;
+
+                // Update buttons
+                CHARACTERS.forEach(c => {
+                    const btn = document.getElementById(`btn-char-${c.id}`);
+                    if (this.data.selectedChar === c.id) {
+                        btn.style.borderColor = '#fff';
+                        btn.style.background = 'var(--primary-glow)';
+                        btn.style.color = '#000';
+                    } else {
+                        btn.style.borderColor = 'var(--secondary-glow)';
+                        btn.style.background = 'transparent';
+                        btn.style.color = 'var(--secondary-glow)';
+                    }
+                });
+            }
+        };
+
+        const game = {
+            active: false,
+            paused: false,
+            layer: document.getElementById('game-layer'),
+            entities: [],
+            stars: [],
+
+            // Physics
+            gravity: 0.6,
+            groundY: 0, // Calculated
+            speed: 8,
+            score: 0,
+            coins: 0,
+            currentBiome: 'moon',
+
+            // Player
+            player: {
+                el: null,
+                x: 50,
+                y: 0,
+                dy: 0,
+                width: 60,
+                height: 60,
+                isJumping: false,
+                canDoubleJump: false
+            },
+
+            // Spawning
+            lastObstacleTime: 0,
+
+            init() {
+                profile.load();
+                ui.showMenu();
+                this.createStars();
+
+                // Input
+                window.addEventListener('keydown', e => {
+                    if (e.code === 'Space' || e.code === 'ArrowUp') this.handleInput();
+                });
+                document.addEventListener('touchstart', e => {
+                    e.preventDefault();
+                    this.handleInput();
+                }, {passive: false});
+                document.addEventListener('mousedown', e => this.handleInput());
+
+                // Resize
+                window.addEventListener('resize', () => this.resize());
+                this.resize();
+
+                // Global Loop
+                requestAnimationFrame(t => this.loop(t));
+            },
+
+            resize() {
+                const groundH = window.innerHeight * 0.12; // 12vh
+                this.groundY = groundH;
+            },
+
+            start() {
+                this.active = true;
+                this.score = 0;
+                this.coins = 0;
+                this.speed = 8;
+                this.entities = [];
+                this.layer.innerHTML = '';
+
+                // Create Player
+                const charData = CHARACTERS[profile.data.selectedChar];
+                const playerEl = document.createElement('div');
+                playerEl.className = 'entity';
+                playerEl.style.width = this.player.width + 'px';
+                playerEl.style.height = this.player.height + 'px';
+                playerEl.innerHTML = charData.svg;
+                this.layer.appendChild(playerEl);
+
+                this.player.el = playerEl;
+                this.player.el.classList.add('run-anim'); // Add run animation
+                this.player.y = 0;
+                this.player.dy = 0;
+                this.player.isJumping = false;
+
+                ui.showGame();
+            },
+
+            selectCharacter(id) {
+                profile.data.selectedChar = id;
+                profile.save();
+                profile.updateDisplay();
+            },
+
+            handleInput() {
+                if (!this.active) return;
+
+                if (!this.player.isJumping) {
+                    this.player.dy = 15;
+                    this.player.isJumping = true;
+                    this.player.canDoubleJump = true;
+                    this.createParticle(this.player.x + 20, this.groundY, 'dust');
+                } else if (this.player.canDoubleJump) {
+                    this.player.dy = 12;
+                    this.player.canDoubleJump = false;
+                    this.createParticle(this.player.x + 20, this.groundY + this.player.y, 'spark');
                 }
-            }
-         }
+            },
 
-        function spawnObstacle() {
-             const now = Date.now();
-            if (now > nextObstacleTime) {
-                 // Use recalculated MIN_OBSTACLE_PIXEL_DISTANCE
-                if (lastObstacle && lastObstacle.left + lastObstacle.width > (gameWidth - MIN_OBSTACLE_PIXEL_DISTANCE)) {
-                     nextObstacleTime = now + 50;
-                     return;
+            end() {
+                this.active = false;
+                profile.data.totalRuns++;
+                profile.data.totalCoins += this.coins;
+                if (this.score > profile.data.highScore) profile.data.highScore = this.score;
+                profile.save();
+                ui.showGameOver(this.score, this.coins);
+            },
+
+            createStars() {
+                // DOM based stars for parallax
+                const container = document.getElementById('bg-stars-far');
+                for(let i=0; i<50; i++) {
+                    const s = document.createElement('div');
+                    s.style.position = 'absolute';
+                    s.style.width = Math.random() * 2 + 'px';
+                    s.style.height = s.style.width;
+                    s.style.background = '#fff';
+                    s.style.left = Math.random() * 100 + '%';
+                    s.style.top = Math.random() * 100 + '%';
+                    s.style.opacity = Math.random();
+                    s.style.borderRadius = '50%';
+                    container.appendChild(s);
                 }
-                createObstacle();
-                nextObstacleTime = now + getRandomInterval();
-            }
-        }
+            },
 
-        function createObstacle() {
-             const obstacleElement = document.createElement('div');
-            obstacleElement.classList.add('obstacle');
-            const type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
-            obstacleElement.classList.add(`obstacle-${type}`);
-            obstacleElement.innerHTML = obstacleSVG[type];
+            spawnEntity() {
+                const type = Math.random() > 0.3 ? 'obstacle' : 'coin';
+                const el = document.createElement('div');
+                el.className = 'entity';
 
-            let obstacleHeight, obstacleWidth;
-            // Base obstacle sizes on game height (vh makes this relative)
-            if (type.includes('rock')) {
-                 obstacleHeight = gameHeight * 0.08; // 8% of screen height
-                 obstacleWidth = obstacleHeight * 1.2; // Maintain aspect ratio
-            } else { // Plant
-                 obstacleHeight = gameHeight * 0.11; // 11% of screen height
-                 obstacleWidth = obstacleHeight * 0.6; // Maintain aspect ratio
-            }
-            // Apply minimum pixel sizes if screen is extremely small? Optional.
-            // obstacleHeight = Math.max(20, obstacleHeight);
-            // obstacleWidth = Math.max(15, obstacleWidth);
+                let entity = {
+                    el: el,
+                    x: window.innerWidth + 50,
+                    y: 0,
+                    width: 40,
+                    height: 40,
+                    type: type,
+                    markedForDeletion: false
+                };
 
-            obstacleElement.style.width = obstacleWidth + 'px';
-            obstacleElement.style.height = obstacleHeight + 'px';
-            obstacleElement.style.left = gameWidth + 'px'; // Spawn off screen right
-
-            gameContainer.appendChild(obstacleElement);
-            const newObstacle = { element: obstacleElement, left: gameWidth, width: obstacleWidth, height: obstacleHeight, type: type };
-            obstacles.push(newObstacle);
-            lastObstacle = newObstacle;
-        }
-
-        function getRandomInterval(isInitial = false) { /* ... (remains the same) ... */
-            const speedFactor = Math.max(0.55, 1 - (gameSpeed / 35));
-            let min = minObstacleInterval * speedFactor;
-            let max = maxObstacleInterval * speedFactor;
-            if (isInitial) { min *= 1.8; max *= 1.8; }
-            return Math.random() * (max - min) + min;
-         }
-
-        function checkCollisions() { /* ... (remains the same) ... */
-             // Uses getBoundingClientRect which should work with scaled elements
-             const catRect = cat.getBoundingClientRect();
-             for (const obstacle of obstacles) {
-                const obstacleRect = obstacle.element.getBoundingClientRect();
-                const bufferX = catRect.width * 0.15;
-                const bufferYTop = catRect.height * 0.1;
-                const bufferYBottom = catRect.height * 0.05;
-                if ( catRect.left + bufferX < obstacleRect.right && catRect.right - bufferX > obstacleRect.left && catRect.top + bufferYTop < obstacleRect.bottom && catRect.bottom - bufferYBottom > obstacleRect.top ) {
-                    gameOver();
-                    return;
-                }
-            }
-         }
-
-        function updateScore() { /* ... (remains the same) ... */
-            if (!isGameOver) { score++; scoreDisplay.textContent = score.toString().padStart(5, '0'); }
-        }
-
-        function increaseSpeed() { /* ... (remains the same) ... */
-            gameSpeed += speedIncreaseFactor;
-        }
-
-        function gameOver() {
-            if (isGameOver) return;
-            console.log("Game Over!");
-            isGameOver = true;
-            clearInterval(gameLoopInterval);
-            clearInterval(scoreInterval);
-            cat.classList.remove('running');
-            saveHighScoreIfBeaten();
-            message.textContent = `Game Over! Score: ${score}. Tap to Restart.`; // Mobile friendly message
-            message.style.display = 'block';
-             // Nullify intervals
-             gameLoopInterval = null;
-             scoreInterval = null;
-        }
-
-        function jump() { /* ... (remains the same) ... */
-             // Check against current groundHeight
-             if (!isJumping && !isGameOver && catBottom <= groundHeight + 1) {
-                isJumping = true;
-                verticalVelocity = initialJumpVelocity;
-            }
-         }
-
-        // --- Event Listeners ---
-        function handleInput(event) {
-             // Prevent default actions like scrolling or zooming on touch/space
-             if ((event.type === 'keydown' && event.code === 'Space') || event.type === 'touchstart' || event.type === 'click') {
-                 event.preventDefault();
-
-                 // Check orientation again on input, just in case
-                 if (window.innerHeight > window.innerWidth) {
-                     console.log("Input ignored: Portrait mode");
-                     return;
-                 }
-
-                 if (isGameOver) {
-                    startGame();
+                if (type === 'obstacle') {
+                    // Rock or Plant
+                    entity.width = 50;
+                    entity.height = 50;
+                    el.style.width = '50px';
+                    el.style.height = '50px';
+                    // Simple SVG rock
+                    el.innerHTML = `<svg viewBox="0 0 50 50"><path d="M5,50 L15,10 L35,5 L45,50 Z" fill="#888" stroke="#aaa" stroke-width="2"/></svg>`;
                 } else {
-                    jump();
+                    // Coin
+                    entity.y = Math.random() * 100 + 50; // In air
+                    el.style.bottom = (this.groundY + entity.y) + 'px';
+                    el.style.width = '30px';
+                    el.style.height = '30px';
+                    entity.width = 30;
+                    entity.height = 30;
+                    el.innerHTML = `<svg viewBox="0 0 30 30"><circle cx="15" cy="15" r="12" fill="none" stroke="#ffd700" stroke-width="3" /><text x="15" y="20" text-anchor="middle" fill="#ffd700" font-size="15">$</text></svg>`;
+                    // Add slight bob animation via CSS class if desired
                 }
+
+                this.layer.appendChild(el);
+                this.entities.push(entity);
+            },
+
+            createParticle(x, y, type) {
+                const p = document.createElement('div');
+                p.style.position = 'absolute';
+                p.style.left = x + 'px';
+                p.style.bottom = y + 'px';
+                p.style.width = '10px';
+                p.style.height = '10px';
+                p.style.background = type === 'dust' ? '#aaa' : '#0ff';
+                p.style.borderRadius = '50%';
+                p.style.pointerEvents = 'none';
+                p.style.transition = 'all 0.5s';
+                p.style.zIndex = 30;
+
+                this.layer.appendChild(p);
+
+                // Animate
+                requestAnimationFrame(() => {
+                    p.style.transform = `translate(${Math.random()*20-10}px, -20px) scale(0)`;
+                    p.style.opacity = 0;
+                });
+
+                setTimeout(() => p.remove(), 500);
+            },
+
+            updateBiome() {
+                const root = document.documentElement;
+                if (this.score > 2000 && this.currentBiome !== 'nebula') {
+                    this.currentBiome = 'nebula';
+                    root.style.setProperty('--sky-top', '#2d0a3d');
+                    root.style.setProperty('--sky-bot', '#ff007f');
+                    root.style.setProperty('--ground-top', '#3d0a25');
+                    root.style.setProperty('--ground-bot', '#1a0510');
+                    ui.spawnFloatingText("ENTERING NEBULA", window.innerWidth/2, window.innerHeight/2, '#ff007f');
+                } else if (this.score > 1000 && this.score <= 2000 && this.currentBiome !== 'mars') {
+                    this.currentBiome = 'mars';
+                    root.style.setProperty('--sky-top', '#3d1a0a');
+                    root.style.setProperty('--sky-bot', '#803010');
+                    root.style.setProperty('--ground-top', '#5a2010');
+                    root.style.setProperty('--ground-bot', '#250d05');
+                    ui.spawnFloatingText("ENTERING MARS", window.innerWidth/2, window.innerHeight/2, '#ff4500');
+                } else if (this.score <= 1000 && this.currentBiome !== 'moon') {
+                    this.currentBiome = 'moon';
+                    root.style.setProperty('--sky-top', '#020510');
+                    root.style.setProperty('--sky-bot', '#182848');
+                    root.style.setProperty('--ground-top', '#2a2a5a');
+                    root.style.setProperty('--ground-bot', '#101025');
+                }
+            },
+
+            loop(time) {
+                requestAnimationFrame(t => this.loop(t));
+
+                if (!this.active || this.paused) return;
+
+                // Speed Progression
+                this.speed += 0.001;
+                this.score += this.speed * 0.01;
+
+                this.updateBiome();
+
+                // Player Physics
+                this.player.dy -= this.gravity;
+                this.player.y += this.player.dy;
+
+                if (this.player.y < 0) {
+                    this.player.y = 0;
+                    this.player.dy = 0;
+                    this.player.isJumping = false;
+                }
+
+                this.player.el.style.bottom = (this.groundY + this.player.y) + 'px';
+                this.player.el.style.left = this.player.x + 'px'; // Fixed x
+
+                // Spawning
+                if (time - this.lastObstacleTime > 1500 + Math.random() * 2000 - (this.speed * 20)) {
+                    this.spawnEntity();
+                    this.lastObstacleTime = time;
+                }
+
+                // Entities Loop
+                for (let i = this.entities.length - 1; i >= 0; i--) {
+                    let ent = this.entities[i];
+                    ent.x -= this.speed;
+                    ent.el.style.left = ent.x + 'px';
+
+                    if (ent.type === 'coin') {
+                        // Vertical sync for coins (static height relative to ground)
+                        ent.el.style.bottom = (this.groundY + ent.y) + 'px';
+                    } else {
+                        ent.el.style.bottom = this.groundY + 'px';
+                    }
+
+                    // Cleanup
+                    if (ent.x < -100) {
+                        ent.el.remove();
+                        this.entities.splice(i, 1);
+                        continue;
+                    }
+
+                    // Collision
+                    // Simple AABB
+                    const playerRect = {
+                        l: this.player.x + 10, r: this.player.x + this.player.width - 10,
+                        t: this.player.y + this.player.height - 10, b: this.player.y + 10
+                    };
+                    const entRect = {
+                        l: ent.x + 5, r: ent.x + ent.width - 5,
+                        t: (ent.type === 'coin' ? ent.y : 0) + ent.height - 5,
+                        b: (ent.type === 'coin' ? ent.y : 0) + 5
+                    };
+
+                    if (playerRect.l < entRect.r && playerRect.r > entRect.l &&
+                        playerRect.b < entRect.t && playerRect.t > entRect.b) {
+
+                        if (ent.type === 'coin') {
+                            this.coins++;
+                            ui.spawnFloatingText("+1", ent.x, window.innerHeight - (this.groundY + ent.y + 50), '#ffd700');
+                            ent.el.remove();
+                            this.entities.splice(i, 1);
+                            this.createParticle(ent.x, this.groundY + ent.y, 'spark');
+                        } else {
+                            // Death Sequence
+                            this.player.el.classList.remove('run-anim');
+                            this.player.el.classList.add('explode-anim');
+                            this.createParticle(this.player.x, this.groundY, 'dust');
+
+                            // Delay end screen slightly to show explosion
+                            this.active = false; // Stop updating physics
+                            setTimeout(() => this.end(), 800);
+                        }
+                    }
+                }
+
+                // Parallax Update (background-position)
+                // Use a cumulative offset instead of a modulo on a fixed width
+                if (!this.bgOffset) this.bgOffset = 0;
+                this.bgOffset += this.speed * 0.5;
+
+                document.getElementById('bg-mountains').style.backgroundPositionX = `-${this.bgOffset}px`;
+                // Stars use DOM elements, so they still need transform, but let's fix the logic
+                // Actually, just let the stars drift indefinitely or reset when off screen
+
+                // Update Star layers (CSS animation handle this? No, we didn't add CSS anim for stars movement, just twinkle)
+                // Let's add a simple background position shift for stars if they were images, but they are DOM elements.
+                // The DOM stars are static in the current code (created once).
+                // Let's make the container move?
+                // Simplest fix for stars is to leave them static or add a very slow CSS animation.
+                // But for "Insane Level", let's make the container transform and reset.
+
+                const starShift = (this.bgOffset * 0.2) % window.innerWidth;
+                document.getElementById('bg-stars-near').style.transform = `translateX(-${starShift}px)`;
+                document.getElementById('bg-stars-far').style.transform = `translateX(-${starShift * 0.5}px)`;
+
+                ui.updateHUD(this.score, this.coins);
             }
-        }
-        document.addEventListener('keydown', handleInput); // For keyboard testing/desktops
-        gameContainer.addEventListener('click', handleInput); // Fallback click
-        gameContainer.addEventListener('touchstart', handleInput); // Primary mobile input
+        };
 
-        // --- Resize Listener ---
-        // Handle resizing/orientation change more gracefully
-        let resizeTimeout;
-        window.addEventListener('resize', () => {
-            // Clear previous timeout to avoid multiple quick calls
-            clearTimeout(resizeTimeout);
-            // Wait a short moment after resize stops before reacting
-            resizeTimeout = setTimeout(() => {
-                console.log("Window resized/rotated");
-                 if (!isGameOver) {
-                     // Option 1: Pause the game (complex)
-                     // Option 2: Just end the game (simpler)
-                     console.log("Game ended due to resize/rotation.");
-                     gameOver();
-                     message.textContent = `Game Paused. Tap to Restart.`; // Or specific message
-                     message.style.display = 'block';
-                 }
-                 // Always update dimensions for the next game start
-                 updateDimensions();
-                 // If game over message is showing, ensure cat is placed correctly
-                 if (isGameOver) {
-                    cat.style.bottom = groundHeight + 'px';
-                 }
-            }, 250); // 250ms debounce
-        });
-
-
-        // --- Initial Setup ---
-        loadHighScore();
-        message.style.display = 'block'; // Show start message
-        // Initial dimension update on load
-        // Use a small delay or DOMContentLoaded if styles rely heavily on calculated vh/vw
-        window.addEventListener('DOMContentLoaded', () => {
-            updateDimensions();
-            cat.style.bottom = catBottom + 'px'; // Set initial position correctly
-             scoreDisplay.textContent = score.toString().padStart(5, '0');
-        });
-
+        // Start
+        game.init();
 
     </script>
 </body>
